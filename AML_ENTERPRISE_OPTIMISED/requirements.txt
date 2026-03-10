@@ -1,0 +1,9 @@
+faker
+pandas
+numpy
+rapidfuzz
+xgboost
+scikit-learn
+networkx
+scipy
+metaphone

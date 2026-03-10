@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OWS Rules Implementation Report</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0e1a; min-height: 100vh; color: #e2e8f0; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; }
+  code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+  button { cursor: pointer; }
+  ul { list-style: disc; }
+
+  .tag {
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-weight: 600;
+    white-space: nowrap;
+    letter-spacing: 0.05em;
+    display: inline-block;
+  }
+  .tag-normal { padding: 3px 10px; font-size: 11px; }
+  .tag-small  { padding: 2px 6px;  font-size: 10px; }
+  .tag-accent  { background: #0c1f35; border: 1px solid #0ea5e9; color: #38bdf8; }
+  .tag-green   { background: #052e16; border: 1px solid #10b981; color: #34d399; }
+  .tag-amber   { background: #1c1003; border: 1px solid #f59e0b; color: #fbbf24; }
+  .tag-red     { background: #1f0a0a; border: 1px solid #ef4444; color: #f87171; }
+  .tag-purple  { background: #1a0533; border: 1px solid #a855f7; color: #c084fc; }
+  .tag-gray    { background: #0f172a; border: 1px solid #334155; color: #64748b; }
+
+  /* Header */
+  #header { border-bottom: 1px solid #1e2d4a; padding: 32px 48px 28px; }
+  #header .pre-title { font-size: 10px; color: #0ea5e9; font-family: monospace; letter-spacing: 0.3em; text-transform: uppercase; margin-bottom: 10px; }
+  #header h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.2; }
+  #header h1 span { color: #0ea5e9; }
+  #header .subtitle { color: #94a3b8; font-size: 14px; margin-top: 10px; }
+  #header .stats { display: flex; gap: 24px; margin-top: 20px; flex-wrap: wrap; }
+  #header .stat-item { text-align: center; }
+  #header .stat-value { font-size: 26px; font-weight: 800; font-family: monospace; }
+  #header .stat-label { font-size: 10px; color: #64748b; letter-spacing: 0.12em; }
+
+  /* Tabs */
+  #tabs { padding: 20px 48px 0; display: flex; gap: 8px; border-bottom: 1px solid #1e2d4a; }
+  .tab-btn { padding: 10px 20px; font-size: 12px; font-weight: 600; font-family: monospace; letter-spacing: 0.1em; text-transform: uppercase; border-radius: 4px; transition: all 0.2s; background: transparent; color: #64748b; border: 1px solid #1e2d4a; }
+  .tab-btn.active { background: #0ea5e9; color: #fff; border-color: #0ea5e9; }
+
+  /* Content */
+  #content { padding: 40px 48px; max-width: 1200px; }
+
+  /* Section */
+  .section { margin-bottom: 48px; }
+  .section-pre { font-size: 11px; color: #0ea5e9; font-family: monospace; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 6px; }
+  .section h2 { font-size: 22px; color: #e2e8f0; font-weight: 700; letter-spacing: -0.02em; }
+
+  /* New files */
+  .new-file-card { background: #051a0e; border: 1px solid #065f46; border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; }
+  .new-file-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .new-file-header .lines { color: #64748b; font-size: 11px; }
+  .new-file-summary { margin: 0 0 10px; color: #94a3b8; font-size: 13px; }
+  .new-file-exports { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .new-file-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .new-file-box { background: #020f08; border: 1px solid #064e3b; border-radius: 6px; padding: 10px 14px; }
+  .new-file-box .box-label { font-size: 10px; color: #059669; letter-spacing: 0.1em; margin-bottom: 6px; }
+  .new-file-box p { margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.6; }
+
+  /* Modified files */
+  .mod-file-card { background: #1a1000; border: 1px solid #78350f; border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; }
+  .mod-file-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .mod-file-header .lines { color: #64748b; font-size: 11px; }
+  .mod-file-summary { margin: 0 0 12px; color: #94a3b8; font-size: 13px; }
+  .mod-file-changes { background: #0d0900; border: 1px solid #451a03; border-radius: 6px; padding: 10px 14px; }
+  .mod-file-changes .box-label { font-size: 10px; color: #d97706; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .mod-file-changes ul { padding-left: 16px; }
+  .mod-file-changes li { font-size: 12px; color: #94a3b8; line-height: 1.7; margin-bottom: 2px; }
+
+  /* Unchanged table */
+  .unchanged-wrap { background: #111827; border: 1px solid #1e2d4a; border-radius: 8px; overflow: hidden; }
+  .unchanged-wrap table { width: 100%; border-collapse: collapse; }
+  .unchanged-wrap thead tr { border-bottom: 1px solid #1e2d4a; }
+  .unchanged-wrap th { padding: 10px 16px; text-align: left; font-size: 10px; color: #64748b; letter-spacing: 0.12em; font-weight: 600; }
+  .unchanged-wrap td { padding: 9px 16px; border-bottom: 1px solid #1e2d4a; }
+  .unchanged-wrap tr:last-child td { border-bottom: none; }
+  .unchanged-wrap tr:nth-child(even) { background: #0c1220; }
+  .unchanged-wrap .path-cell code { font-size: 12px; color: #64748b; }
+  .unchanged-wrap .path-cell .lcount { color: #334155; font-size: 10px; margin-left: 8px; }
+  .unchanged-wrap .note-cell { font-size: 12px; color: #475569; }
+
+  /* Architecture */
+  .arch-hint { margin-bottom: 32px; padding: 16px 20px; background: #050e1a; border: 1px solid #0369a1; border-radius: 8px; }
+  .arch-hint .label { font-size: 11px; color: #0ea5e9; font-family: monospace; letter-spacing: 0.15em; margin-bottom: 6px; }
+  .arch-hint p { margin: 0; font-size: 13px; color: #94a3b8; line-height: 1.7; }
+
+  .connector { display: flex; justify-content: center; height: 28px; align-items: center; }
+  .connector-line { width: 2px; height: 100%; }
+
+  .layer-card { border-radius: 10px; overflow: hidden; cursor: pointer; transition: all 0.2s; }
+  .layer-header { padding: 16px 24px; display: flex; align-items: center; gap: 20px; }
+  .layer-step { font-family: monospace; font-size: 11px; letter-spacing: 0.2em; min-width: 28px; }
+  .layer-bar { width: 3px; height: 32px; border-radius: 2px; }
+  .layer-info { flex: 1; }
+  .layer-name { font-size: 14px; font-weight: 700; letter-spacing: 0.05em; }
+  .layer-files { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+  .layer-toggle { font-size: 10px; color: #64748b; }
+
+  .layer-detail { border-top-style: solid; border-top-width: 1px; padding: 20px 24px 24px; background: #0a0e1a; }
+  .problem-box { margin-bottom: 16px; padding: 12px 16px; background: #12080a; border: 1px solid #3f0d13; border-radius: 6px; }
+  .problem-box .box-label { font-size: 10px; color: #f87171; letter-spacing: 0.12em; margin-bottom: 6px; }
+  .problem-box p { margin: 0; font-size: 13px; color: #fca5a5; line-height: 1.6; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .detail-box { padding: 12px 16px; background: #070e1a; border-radius: 6px; border-style: solid; border-width: 1px; }
+  .detail-box .box-label { font-size: 10px; letter-spacing: 0.12em; margin-bottom: 6px; }
+  .detail-box p, .detail-box ul { margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.7; }
+  .detail-box ul { padding-left: 14px; }
+  .critical-box { padding: 12px 16px; background: #0a1500; border: 1px solid rgba(16,185,129,0.27); border-radius: 6px; }
+  .critical-box .box-label { font-size: 10px; color: #10b981; letter-spacing: 0.12em; margin-bottom: 6px; }
+  .critical-box p { margin: 0; font-size: 12px; color: #86efac; line-height: 1.7; }
+
+  /* Final output */
+  .final-output { border: 1px solid #1e2d4a; border-radius: 10px; background: #0f172a; padding: 20px 24px; text-align: center; }
+  .final-output .fo-pre { font-size: 10px; color: #64748b; letter-spacing: 0.2em; margin-bottom: 8px; }
+  .final-output .fo-title { font-size: 16px; font-weight: 700; color: #e2e8f0; margin-bottom: 10px; }
+  .final-output .fo-tags { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+  /* Rule matrix */
+  .rule-intro { margin-bottom: 28px; font-size: 13px; color: #94a3b8; line-height: 1.7; }
+  .rule-table-wrap { overflow-x: auto; }
+  .rule-table { width: 100%; border-collapse: collapse; background: #111827; border: 1px solid #1e2d4a; border-radius: 8px; overflow: hidden; }
+  .rule-table thead tr { background: #0c1526; }
+  .rule-table th { padding: 12px 16px; font-size: 10px; color: #64748b; letter-spacing: 0.1em; font-weight: 600; border-bottom: 1px solid #1e2d4a; }
+  .rule-table th.job-col { text-align: center; min-width: 80px; color: #0ea5e9; font-size: 10px; letter-spacing: 0.12em; font-weight: 700; }
+  .rule-table td { padding: 13px 16px; border-bottom: 1px solid #1e2d4a; }
+  .rule-table tr:last-child td { border-bottom: none; }
+  .rule-table tr:nth-child(even) td { background: #0c1220; }
+  .rule-table .rule-cell { display: flex; align-items: center; gap: 8px; }
+  .rule-table .rule-lbl { font-size: 12px; color: #94a3b8; }
+  .rule-table .check-cell { text-align: center; font-size: 16px; font-weight: 700; }
+  .rule-table .reason-cell { font-size: 11px; color: #64748b; line-height: 1.5; }
+
+  /* Score flow */
+  .flow-row { display: flex; gap: 0; margin-bottom: 8px; }
+  .flow-step { width: 160px; padding: 10px 14px; background: #0c1526; border: 1px solid #1e2d4a; border-right: none; border-radius: 6px 0 0 6px; display: flex; align-items: center; }
+  .flow-step span { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; }
+  .flow-detail { flex: 1; padding: 10px 16px; background: #111827; border: 1px solid #1e2d4a; border-radius: 0 6px 6px 0; display: flex; align-items: center; }
+  .flow-detail code { font-size: 11px; color: #94a3b8; font-family: monospace; }
+
+  @media (max-width: 700px) {
+    #header { padding: 20px 16px 16px; }
+    #tabs { padding: 12px 16px 0; }
+    #content { padding: 24px 16px; }
+    .new-file-grid { grid-template-columns: 1fr; }
+    .detail-grid { grid-template-columns: 1fr; }
+    .flow-step { width: 110px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div class="pre-title">AML ENTERPRISE SYSTEM — BUILD DELTA + ARCHITECTURE</div>
+  <h1>OWS Rules Implementation<span> Report</span></h1>
+  <p class="subtitle">AML_ENTERPRISE_OPTIMISED_COMPLETE.zip → AML_ENTERPRISE_OWS_RULES_COMPLETE.zip</p>
+  <div class="stats">
+    <div class="stat-item"><div class="stat-value" style="color:#10b981">5</div><div class="stat-label">NEW FILES</div></div>
+    <div class="stat-item"><div class="stat-value" style="color:#f59e0b">4</div><div class="stat-label">MODIFIED FILES</div></div>
+    <div class="stat-item"><div class="stat-value" style="color:#64748b">32</div><div class="stat-label">UNCHANGED FILES</div></div>
+    <div class="stat-item"><div class="stat-value" style="color:#0ea5e9">~1,400</div><div class="stat-label">LINES ADDED</div></div>
+    <div class="stat-item"><div class="stat-value" style="color:#a855f7">8</div><div class="stat-label">NEW OWS RULES</div></div>
+    <div class="stat-item"><div class="stat-value" style="color:#94a3b8">44 → 49</div><div class="stat-label">TOTAL FILES</div></div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div id="tabs">
+  <button class="tab-btn active" onclick="switchTab('changes',this)">File Changes</button>
+  <button class="tab-btn" onclick="switchTab('architecture',this)">Architecture Flow</button>
+  <button class="tab-btn" onclick="switchTab('rules',this)">Rule Matrix</button>
+</div>
+
+<!-- Content -->
+<div id="content">
+
+  <!-- ═══════ TAB: CHANGES ═══════ -->
+  <div id="tab-changes">
+
+    <!-- New Files -->
+    <div class="section">
+      <div style="margin-bottom:20px">
+        <div class="section-pre">5 new files</div>
+        <h2>New Files Added</h2>
+      </div>
+
+      <!-- config/rule_config.py -->
+      <div class="new-file-card">
+        <div class="new-file-header">
+          <span class="tag tag-normal tag-green">NEW</span>
+          <code style="font-size:13px;color:#34d399">config/rule_config.py</code>
+          <span class="lines">181 lines</span>
+        </div>
+        <p class="new-file-summary">Per-job rule enable/disable flags — OWS Run Profile equivalent</p>
+        <div class="new-file-exports">
+          <span class="tag tag-small tag-gray">RuleConfig</span>
+          <span class="tag tag-small tag-gray">get_rule_config()</span>
+          <span class="tag tag-small tag-gray">list_all_configs()</span>
+        </div>
+        <div class="new-file-grid">
+          <div class="new-file-box"><div class="box-label">WHAT IT CONTAINS</div><p>Defines a RuleConfig dataclass and a config dict for all 10 jobs. Controls which of the 8 atomic rules (I010O–I080O) are enabled per job. Phonetic is OFF for SAN/SCION, ON for PEP/NNS. DOB cluster OFF for all entity jobs.</p></div>
+          <div class="new-file-box"><div class="box-label">WHY IT WAS NEEDED</div><p>OWS allows individual rules to be toggled on/off per screening type. Without this file, every job would run every rule — causing false positives (phonetic matching on strict sanction jobs) and wasted compute (DOB matching on entity jobs that carry no DOB).</p></div>
+        </div>
+      </div>
+
+      <!-- matching_engine/rules/atomic_rules.py -->
+      <div class="new-file-card">
+        <div class="new-file-header">
+          <span class="tag tag-normal tag-green">NEW</span>
+          <code style="font-size:13px;color:#34d399">matching_engine/rules/atomic_rules.py</code>
+          <span class="lines">397 lines</span>
+        </div>
+        <p class="new-file-summary">8 discrete OWS-named atomic match rule functions</p>
+        <div class="new-file-exports">
+          <span class="tag tag-small tag-gray">rule_I010O_exact()</span>
+          <span class="tag tag-small tag-gray">rule_I020O_fuzzy()</span>
+          <span class="tag tag-small tag-gray">rule_I030O_reversed()</span>
+          <span class="tag tag-small tag-gray">rule_I040O_given_family()</span>
+          <span class="tag tag-small tag-gray">rule_I050O_abbreviated()</span>
+          <span class="tag tag-small tag-gray">rule_I060O_phonetic()</span>
+          <span class="tag tag-small tag-gray">rule_I070O_transliteration()</span>
+          <span class="tag tag-small tag-gray">rule_I080O_dob_cluster()</span>
+          <span class="tag tag-small tag-gray">best_alias_score()</span>
+        </div>
+        <div class="new-file-grid">
+          <div class="new-file-box"><div class="box-label">WHAT IT CONTAINS</div><p>Contains one pure function per OWS rule code. Each is independently callable, independently auditable. Also contains best_alias_score() which runs any atomic rule across primary name + all pipe-delimited aliases.</p></div>
+          <div class="new-file-box"><div class="box-label">WHY IT WAS NEEDED</div><p>OWS reports show WHICH rule fired (e.g. 'matched on I050O Abbreviated given name'). The old code blended everything into one composite score — analysts couldn't see why a match was flagged. These functions make every match technique named, trackable, and individually tunable.</p></div>
+        </div>
+      </div>
+
+      <!-- matching_engine/rules/rule_chain.py -->
+      <div class="new-file-card">
+        <div class="new-file-header">
+          <span class="tag tag-normal tag-green">NEW</span>
+          <code style="font-size:13px;color:#34d399">matching_engine/rules/rule_chain.py</code>
+          <span class="lines">190 lines</span>
+        </div>
+        <p class="new-file-summary">Orchestrates atomic rules in priority order, returns best named result</p>
+        <div class="new-file-exports">
+          <span class="tag tag-small tag-gray">RuleChain</span>
+          <span class="tag tag-small tag-gray">NameMatchResult</span>
+        </div>
+        <div class="new-file-grid">
+          <div class="new-file-box"><div class="box-label">WHAT IT CONTAINS</div><p>RuleChain reads the per-job RuleConfig, runs only enabled atomic rules for a given candidate row, returns a NameMatchResult with the best-scoring rule's code + label + score + all_rule_scores dict.</p></div>
+          <div class="new-file-box"><div class="box-label">WHY IT WAS NEEDED</div><p>This is the bridge between config and individual rules. Without it, each base_rule class would need to manually call every atomic function. RuleChain centralises orchestration so adding a new rule requires only adding it to atomic_rules.py and registering it here — nothing else changes.</p></div>
+        </div>
+      </div>
+
+      <!-- scoring/risk_element_weights.py -->
+      <div class="new-file-card">
+        <div class="new-file-header">
+          <span class="tag tag-normal tag-green">NEW</span>
+          <code style="font-size:13px;color:#34d399">scoring/risk_element_weights.py</code>
+          <span class="lines">264 lines</span>
+        </div>
+        <p class="new-file-summary">OWS Appendix D risk element weighting table</p>
+        <div class="new-file-exports">
+          <span class="tag tag-small tag-gray">get_weights()</span>
+          <span class="tag tag-small tag-gray">RISK_ELEMENT_WEIGHTS</span>
+          <span class="tag tag-small tag-gray">CATEGORY_RISK</span>
+          <span class="tag tag-small tag-gray">PEP_TIER_RISK</span>
+          <span class="tag tag-small tag-gray">DATASET_PREFIX_MAP</span>
+        </div>
+        <div class="new-file-grid">
+          <div class="new-file-box"><div class="box-label">WHAT IT CONTAINS</div><p>Defines the per-list-type weighting table for 8 risk elements: res_ope_countries, nat_reg_countries, membership, category, occupation, deceased, active, external_risk. 13 list prefixes × 2 entity types. Also defines CATEGORY_RISK and PEP_TIER_RISK lookup dicts.</p></div>
+          <div class="new-file-box"><div class="box-label">WHY IT WAS NEEDED</div><p>OWS produces a risk_score (0–100) separate from match_score. Without this table the system had no concept of 'how risky is this watchlist record' independent of how closely the name matched. An OFAC SDN record should score higher risk than a regional adverse media hit even at the same match score.</p></div>
+        </div>
+      </div>
+
+      <!-- scoring/risk_scorer.py -->
+      <div class="new-file-card">
+        <div class="new-file-header">
+          <span class="tag tag-normal tag-green">NEW</span>
+          <code style="font-size:13px;color:#34d399">scoring/risk_scorer.py</code>
+          <span class="lines">346 lines</span>
+        </div>
+        <p class="new-file-summary">Computes risk_score, priority_score, customer-side risk blend</p>
+        <div class="new-file-exports">
+          <span class="tag tag-small tag-gray">score_record()</span>
+          <span class="tag tag-small tag-gray">compute_watchlist_risk()</span>
+          <span class="tag tag-small tag-gray">compute_customer_risk()</span>
+          <span class="tag tag-small tag-gray">compute_blended_risk_score()</span>
+          <span class="tag tag-small tag-gray">compute_priority_score()</span>
+          <span class="tag tag-small tag-gray">RiskScoringResult</span>
+        </div>
+        <div class="new-file-grid">
+          <div class="new-file-box"><div class="box-label">WHAT IT CONTAINS</div><p>Implements OWS section 3.5 formula: wl_risk = Σ(element × weight), cust_risk from input record fields, blended_risk = (wl × 0.5) + (cust × 0.5) → 0–100 int. priority_score = (match × 0.6) + (risk/100 × 0.4) → 0–100 int.</p></div>
+          <div class="new-file-box"><div class="box-label">WHY IT WAS NEEDED</div><p>OWS outputs 3 separate scores per alert: matchScore, riskScore, priorityScore. The old system had only rule_score which conflated match quality with risk level. Analysts need risk_score to understand record severity and priority_score to rank the alert queue.</p></div>
+        </div>
+      </div>
+    </div><!-- /new files section -->
+
+    <!-- Modified Files -->
+    <div class="section">
+      <div style="margin-bottom:20px">
+        <div class="section-pre">4 files updated</div>
+        <h2>Modified Files</h2>
+      </div>
+
+      <div class="mod-file-card">
+        <div class="mod-file-header">
+          <span class="tag tag-normal tag-amber">MODIFIED</span>
+          <code style="font-size:13px;color:#fbbf24">matching_engine/rules/base_rule.py</code>
+          <span class="lines">336 → 453 lines</span>
+        </div>
+        <p class="mod-file-summary">All 7 name-match rules now delegate to RuleChain</p>
+        <div class="mod-file-changes">
+          <div class="box-label">EXACT CHANGES</div>
+          <ul>
+            <li>RuleResult gains: rule_code, rule_label, risk_score (int 0–100), priority_score (int 0–100), all_rule_scores (audit dict)</li>
+            <li>All 7 rules call _chain_score() instead of _best_alias_score() directly</li>
+            <li>New _chain_score() helper: runs RuleChain, falls back to legacy if import fails</li>
+            <li>New _risk_scores() helper: calls score_record(), returns (risk, priority) tuple</li>
+            <li>SanctionIndividualDOBRule removed — DOB cluster is now I080O inside RuleChain</li>
+            <li>CtryRule: completely unchanged</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mod-file-card">
+        <div class="mod-file-header">
+          <span class="tag tag-normal tag-amber">MODIFIED</span>
+          <code style="font-size:13px;color:#fbbf24">etl_layer/normalization.py</code>
+          <span class="lines">114 → 164 lines</span>
+        </div>
+        <p class="mod-file-summary">+50 lines: split_name_parts() and detect_script() added</p>
+        <div class="mod-file-changes">
+          <div class="box-label">EXACT CHANGES</div>
+          <ul>
+            <li>split_name_parts(full_name) → {'given_name': str, 'family_name': str} — last token = family, rest = given</li>
+            <li>detect_script(name) → 'LATIN' | 'ARABIC' | 'CYRILLIC' | 'CJK' | 'MIXED' | 'UNKNOWN' — used by I070O transliteration rule to decide if transliteration is applicable</li>
+            <li>All existing functions: normalize_name, normalize_aliases, normalize_dob, normalize_country — UNCHANGED</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mod-file-card">
+        <div class="mod-file-header">
+          <span class="tag tag-normal tag-amber">MODIFIED</span>
+          <code style="font-size:13px;color:#fbbf24">scoring/consolidator.py</code>
+          <span class="lines">69 → 78 lines</span>
+        </div>
+        <p class="mod-file-summary">DatasetHit passes through 4 new OWS fields</p>
+        <div class="mod-file-changes">
+          <div class="box-label">EXACT CHANGES</div>
+          <ul>
+            <li>DatasetHit gains: rule_code, rule_label, risk_score, priority_score, all_rule_scores</li>
+            <li>consolidate() passes getattr(r, 'rule_code', 'I020O') etc. — backward safe if old RuleResult is passed</li>
+            <li>All consolidation logic (multi-list boost, top-hit selection, AlertDecision) — UNCHANGED</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mod-file-card">
+        <div class="mod-file-header">
+          <span class="tag tag-normal tag-amber">MODIFIED</span>
+          <code style="font-size:13px;color:#fbbf24">data_layer/generators/san_individual.py</code>
+          <span class="lines">49 → 50 lines</span>
+        </div>
+        <p class="mod-file-summary">+1 line: is_deceased field added to SAN individual records</p>
+        <div class="mod-file-changes">
+          <div class="box-label">EXACT CHANGES</div>
+          <ul>
+            <li>is_deceased: random.random() &lt; 0.03 — ~3% of records are deceased</li>
+            <li>Used by _extract_deceased() in risk_scorer.py to reduce risk score for deceased individuals</li>
+            <li>Secondary filter: deceased records can be excluded from results via config</li>
+          </ul>
+        </div>
+      </div>
+    </div><!-- /modified files section -->
+
+    <!-- Unchanged Files -->
+    <div class="section">
+      <div style="margin-bottom:20px">
+        <div class="section-pre">21 files untouched</div>
+        <h2>Unchanged Files</h2>
+      </div>
+      <div class="unchanged-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>FILE PATH</th>
+              <th>NOTE</th>
+            </tr>
+          </thead>
+          <tbody id="unchanged-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /tab-changes -->
+
+  <!-- ═══════ TAB: ARCHITECTURE ═══════ -->
+  <div id="tab-architecture" style="display:none">
+    <div class="arch-hint">
+      <div class="label">HOW TO READ THIS</div>
+      <p>Each layer below shows one step in the name screening pipeline. Click any layer to expand its full detail. Layers marked <span class="tag tag-small tag-green">NEW</span> were added in this update. Layers marked <span class="tag tag-small tag-amber">UPDATED</span> were modified. All others are unchanged foundations.</p>
+    </div>
+    <div id="layers-container"></div>
+    <!-- Final output -->
+    <div class="connector"><div class="connector-line" style="background:#33415566"></div></div>
+    <div class="final-output">
+      <div class="fo-pre">FINAL OUTPUT</div>
+      <div class="fo-title">ScreeningOutput</div>
+      <div class="fo-tags">
+        <span class="tag tag-small tag-gray">overall_decision (ALERT/REVIEW/NO_ALERT)</span>
+        <span class="tag tag-small tag-gray">overall_score [0–1]</span>
+        <span class="tag tag-small tag-gray">rule_code (which OWS rule fired)</span>
+        <span class="tag tag-small tag-gray">risk_score [0–100]</span>
+        <span class="tag tag-small tag-gray">priority_score [0–100]</span>
+        <span class="tag tag-small tag-gray">alert_ids</span>
+        <span class="tag tag-small tag-gray">latency_ms</span>
+      </div>
+    </div>
+  </div><!-- /tab-architecture -->
+
+  <!-- ═══════ TAB: RULES ═══════ -->
+  <div id="tab-rules" style="display:none">
+    <p class="rule-intro">
+      Each cell shows whether a rule is enabled (✓) or disabled (✗) for that job. Disabled rules are skipped by RuleChain — they don't run and don't appear in the audit log. This config lives in <code style="color:#0ea5e9;font-size:12px">config/rule_config.py</code> and can be changed at runtime.
+    </p>
+    <div class="rule-table-wrap">
+      <table class="rule-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;min-width:200px">RULE</th>
+            <th class="job-col">SAN_IND</th>
+            <th class="job-col">SAN_ENT</th>
+            <th class="job-col">SCION</th>
+            <th class="job-col">PEP_IND</th>
+            <th class="job-col">PEP_ENT</th>
+            <th class="job-col">NNS</th>
+            <th style="text-align:left">REASON WHEN DISABLED</th>
+          </tr>
+        </thead>
+        <tbody id="rule-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Score flow -->
+    <div class="section" style="margin-top:32px">
+      <div style="margin-bottom:20px">
+        <div class="section-pre">end-to-end example</div>
+        <h2>Score Flow Through One Alert</h2>
+      </div>
+      <div id="flow-container"></div>
+    </div>
+  </div><!-- /tab-rules -->
+
+</div><!-- /content -->
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+
+const unchanged = [
+  { path: "orchestration/orchestrator.py", lines: 221, note: "Screen() pipeline, batch, CTRY routing — untouched" },
+  { path: "blocking_engine/inverted_index.py", lines: 311, note: "MultiDatasetIndex, candidate retrieval — untouched" },
+  { path: "blocking_engine/blocking.py", lines: null, note: "Blocking strategy — untouched" },
+  { path: "config/job_types.py", lines: 272, note: "10 job definitions, thresholds, dataset lists — untouched" },
+  { path: "data_layer/utils/transliteration_engine.py", lines: 121, note: "Arabic/Cyrillic/CJK maps — already existed, now wired into I070O" },
+  { path: "data_layer/utils/alias_engine.py", lines: null, note: "Alias generation for data layer — untouched" },
+  { path: "data_layer/generators/ctry.py", lines: null, note: "Country risk register — untouched" },
+  { path: "data_layer/generators/pep.py", lines: null, note: "PEP database generator — untouched" },
+  { path: "data_layer/generators/san_entity.py", lines: null, note: "SAN entity generator — untouched" },
+  { path: "data_layer/generators/scion.py", lines: null, note: "SCION watchlist generator — untouched" },
+  { path: "data_layer/generators/nns.py", lines: null, note: "NNS articles + structured generator — untouched" },
+  { path: "data_layer/registry/dataset_registry.py", lines: null, note: "Dataset registration and lookup — untouched" },
+  { path: "matching_engine/matcher.py", lines: null, note: "Standalone matcher utility — untouched" },
+  { path: "policy_engine/thresholds.py", lines: 22, note: "ALERT/REVIEW/NO_ALERT threshold logic — untouched" },
+  { path: "routing_engine/router.py", lines: 26, note: "Job routing from entity_type + country — untouched" },
+  { path: "workflow/alert.py", lines: 135, note: "Alert creation, lifecycle, severity — untouched" },
+  { path: "governance/audit.py", lines: 110, note: "Decision audit logging — untouched" },
+  { path: "ml_engine/model.py", lines: 201, note: "ML risk model — untouched" },
+  { path: "monitoring/kpi.py", lines: 143, note: "KPI tracking — untouched" },
+  { path: "graph_engine/graph.py", lines: 179, note: "Entity relationship graph — untouched" },
+  { path: "feature_engine/feature_builder.py", lines: 171, note: "Feature extraction for ML — untouched" },
+];
+
+const layers = [
+  { id:"input", step:"01", name:"INPUT RECORD", color:"#38bdf8", borderColor:"#0ea5e9", bg:"#050e1f",
+    files:["orchestration/orchestrator.py → ScreeningInput"],
+    problem:"A customer name arrives: 'M. ALI HASSAN', DOB '1970-03-15', country 'IRAN', type INDIVIDUAL",
+    role:"Entry point. Wraps raw API input into a typed ScreeningInput dataclass. Calls normalize_name() immediately so all downstream layers receive clean, consistent strings.",
+    outputs:["Normalised name","Entity type","DOB string","Country","Identifier (passport/account)"],
+    critical:"If normalisation is skipped here, the same person's name in two different character encodings would never match." },
+  { id:"etl", step:"02", name:"ETL / NORMALISATION LAYER", color:"#818cf8", borderColor:"#818cf8", bg:"#0a0a2a",
+    files:["etl_layer/normalization.py"],
+    problem:"Names come in as 'Müller', 'MÜLLER', 'muller', 'MULLER' — all mean the same person.",
+    role:"normalize_name(): strips diacritics for Latin script only (Arabic/CJK preserved), uppercases, collapses whitespace, removes noise punctuation. NEW: split_name_parts() separates 'JOHN MICHAEL SMITH' into given='JOHN MICHAEL' / family='SMITH'. NEW: detect_script() identifies LATIN/ARABIC/CYRILLIC/CJK — tells I070O when transliteration is worth running.",
+    outputs:["Normalised name string","given_name + family_name dict","Script detection result"],
+    critical:"Script-aware normalisation is why Arabic names are not corrupted by NFKD decomposition. Without detect_script(), transliteration would run on every name including pure Latin names where it adds zero value." },
+  { id:"routing", step:"03", name:"ROUTING ENGINE", color:"#34d399", borderColor:"#34d399", bg:"#051a10",
+    files:["routing_engine/router.py","config/job_types.py"],
+    problem:"Same customer could need SAN screening, PEP screening, NNS screening, and CTRY screening — each with different datasets, thresholds, and rules.",
+    role:"route(job_type, entity_type, country) returns a job_code (e.g. 'SAN_IND'). job_types.py defines which datasets each job screens, what threshold triggers an ALERT, and whether it's a country lookup or name match job.",
+    outputs:["job_code","ordered dataset list","alert threshold","is_country_lookup flag"],
+    critical:"The 10-job architecture means thresholds are tailored. PEP_IND threshold is 0.60 (strict) while NNS_IND is 0.75 (lenient). A single universal threshold would either flood analysts with false positives or miss real hits." },
+  { id:"blocking", step:"04", name:"BLOCKING ENGINE", color:"#fb923c", borderColor:"#fb923c", bg:"#1a0b00",
+    files:["blocking_engine/inverted_index.py","blocking_engine/blocking.py"],
+    problem:"5,000 sanction records × every customer = 5 billion comparisons. Impossible in real time.",
+    role:"MultiDatasetIndex uses an inverted index (token → record IDs). For input 'MOHAMMED ALI', it retrieves only records containing 'MOHAMMED' or 'ALI' — reducing 5,000 records to typically 20–80 candidates per query. Also handles exact_id_hit detection when a passport/account number matches.",
+    outputs:["Candidate DataFrame (20–80 rows)","exact_id_hit boolean"],
+    critical:"Without blocking, screening one customer against all 9 SAN datasets would take seconds. With blocking it takes milliseconds. The quality of the inverted index directly determines whether real matches are retrieved for scoring." },
+  { id:"config", step:"05", name:"RULE CONFIG  ← NEW", color:"#c084fc", borderColor:"#c084fc", bg:"#120a2a",
+    files:["config/rule_config.py"],
+    problem:"Phonetic matching is needed for PEP screening but causes too many false positives for strict sanction screening. DOB matching is irrelevant for entity jobs.",
+    role:"get_rule_config('SAN_IND') returns the flag dict for that job. RuleChain reads this before running any atomic rule. Flags can also be changed at runtime for A/B testing.",
+    outputs:["Dict of {rule_code: True/False} for the job"],
+    critical:"This is the OWS Run Profile equivalent. It decouples 'which rules exist' from 'which rules apply here'. Without it, every job would run every rule, making tuning impossible." },
+  { id:"atomic", step:"06", name:"ATOMIC RULES LAYER  ← NEW", color:"#f472b6", borderColor:"#f472b6", bg:"#1a0510",
+    files:["matching_engine/rules/atomic_rules.py"],
+    problem:"The old _composite() function ran 4 algorithms and returned one blended number. Analysts couldn't tell if a match fired because of phonetic similarity or because names were reversed.",
+    role:"8 pure functions, each implementing one OWS rule. Each is independently callable and returns a float [0–1]. best_alias_score() wraps any rule function to run it against primary name + all aliases.",
+    outputs:["I010O: 1.0 or 0.0 (exact only)","I020O: weighted fuzzy composite","I030O: reversed token score","I040O: given/family split score","I050O: abbreviated initial score","I060O: phonetic metaphone score","I070O: transliteration variant score","I080O: name+DOB cluster score"],
+    critical:"Each rule is a separate evidence type. I050O fires on 'M. ALI' → 'MOHAMMED ALI'. I070O fires on 'HUSSEIN' → 'HUSSAIN'. I080O fires when a borderline name match is confirmed by matching DOB. Separating them makes the match reason auditable." },
+  { id:"chain", step:"07", name:"RULE CHAIN  ← NEW", color:"#38bdf8", borderColor:"#38bdf8", bg:"#020e1f",
+    files:["matching_engine/rules/rule_chain.py"],
+    problem:"How do you run 8 rules, skip disabled ones, run each across all aliases, and surface the single best result with its provenance?",
+    role:"RuleChain.run() iterates _ALL_RULES in priority order (I010O first, I060O last), checks config.enabled(key), calls best_alias_score(rule_fn, inp_name, row) for each, tracks the best score across all rules, returns NameMatchResult with rule_code, rule_label, score, matched_name, matched_on_alias, and all_rule_scores dict.",
+    outputs:["NameMatchResult.score (best score)","NameMatchResult.rule_code (which rule won)","NameMatchResult.all_rule_scores (full audit dict)"],
+    critical:"The all_rule_scores dict is what enables transparency. An analyst alert shows: I010O: 0.0, I020O: 0.73, I050O: 0.90 → matched on I050O. They know the name was abbreviated, not an exact match, and can judge accordingly." },
+  { id:"baserule", step:"08", name:"JOB RULE CLASSES  ← UPDATED", color:"#fbbf24", borderColor:"#fbbf24", bg:"#1a0f00",
+    files:["matching_engine/rules/base_rule.py"],
+    problem:"Each job type has its own scoring logic beyond pure name matching: PEP has tier boosts, SAN has DOB boosts, SCION has watchlist status boosts, entities need suffix stripping.",
+    role:"7 rule classes (SanctionIndividualRule, SanctionEntityRule, ScionRule, PEPIndividualRule, PEPEntityRule, NNSArticleRule, NNSStructuredRule) each call _chain_score() to get the name match result, then apply job-specific boosts/penalties on top. Returns RuleResult which now carries rule_code, rule_label, risk_score, priority_score, all_rule_scores.",
+    outputs:["RuleResult with all 12 fields including 4 new OWS fields"],
+    critical:"Job rules are the domain logic layer. PEP Tier 1 active official gets +0.11 boost. BLACKLIST status in SCION gets +0.10. These boosts encode compliance policy decisions that must be auditable and modifiable without touching the matching algorithms." },
+  { id:"risk", step:"09", name:"RISK SCORING LAYER  ← NEW", color:"#a3e635", borderColor:"#a3e635", bg:"#071500",
+    files:["scoring/risk_element_weights.py","scoring/risk_scorer.py"],
+    problem:"A name that scores 0.75 against OFAC SDN terrorism record is fundamentally different from a 0.75 score against an adverse media article. Match score alone doesn't tell analysts which alert to look at first.",
+    role:"risk_element_weights.py holds the OWS Appendix D weighting table: per record type (OFAC_I, WC_PEP_I, etc.) each risk element has a weight summing to 1.0. risk_scorer.py computes: wl_risk = Σ(element_score × weight), cust_risk from input country fields, blended_risk = (wl × 0.5) + (cust × 0.5) → 0–100 int, priority = (match × 0.6) + (risk/100 × 0.4) → 0–100 int.",
+    outputs:["wl_risk_score [0–1]","cust_risk_score [0–1]","blended_risk_score [0–100]","priority_score [0–100]","per-element breakdown dict"],
+    critical:"priority_score is what determines queue order for analysts. Without it, a 0.72 match on a low-risk adverse media article would sit above a 0.71 match on an OFAC SDN terrorism record. The risk layer prevents that inversion." },
+  { id:"consolidator", step:"10", name:"SCORING CONSOLIDATOR  ← UPDATED", color:"#f87171", borderColor:"#f87171", bg:"#1a0505",
+    files:["scoring/consolidator.py"],
+    problem:"One customer might match 3 different datasets at different scores. What is the single consolidated score and decision?",
+    role:"Collects all RuleResults from all datasets. Applies multi-list multiplier (1.15× per additional list hit beyond first — appearing on 3 lists is stronger evidence than appearing on 1). Selects top_hit. Passes new fields (rule_code, risk_score, priority_score) through to DatasetHit.",
+    outputs:["ConsolidatedResult with top_hit, consolidated_score, list_hit_count, DatasetHit list"],
+    critical:"The multi-list multiplier is why OFAC + UN + EU triple-hit records correctly score higher than a single-list hit at the same name similarity. It also ensures priority_score and risk_score from the top hit flow all the way to the final output." },
+  { id:"policy", step:"11", name:"POLICY + WORKFLOW LAYER", color:"#67e8f9", borderColor:"#67e8f9", bg:"#001a1f",
+    files:["policy_engine/thresholds.py","workflow/alert.py","governance/audit.py"],
+    problem:"A score of 0.68 means different things for SAN vs NNS. And a compliance team needs more than a boolean — they need severity, status lifecycle, and an audit trail.",
+    role:"apply_threshold(score, job_code) compares against the job's specific threshold with a ±0.08 review band. create_alert() produces a structured Alert with severity (CRITICAL/HIGH/MEDIUM/LOW), status lifecycle (OPEN→UNDER_REVIEW→CLOSED), and queue assignment. audit.log_decision() writes every decision to the audit log.",
+    outputs:["AlertDecision (ALERT/REVIEW/NO_ALERT)","Alert object with alert_id, severity, status","Audit log entry"],
+    critical:"The review band is what turns a binary pass/fail into a triaged queue. Without it, borderline matches either all ALERT (floods analysts) or all NO_ALERT (misses real hits). The 0.08 band captures ambiguous cases for human review." },
+];
+
+const ruleRows = [
+  { code:"I010O", label:"Exact name match",            san_ind:true,  san_ent:true,  scion:true,  pep_ind:true,  pep_ent:true,  nns:true  },
+  { code:"I020O", label:"Fuzzy composite",              san_ind:true,  san_ent:true,  scion:true,  pep_ind:true,  pep_ent:true,  nns:true  },
+  { code:"I030O", label:"Reversed token order",        san_ind:true,  san_ent:true,  scion:true,  pep_ind:true,  pep_ent:true,  nns:true  },
+  { code:"I040O", label:"Given/family name split",     san_ind:true,  san_ent:true,  scion:true,  pep_ind:true,  pep_ent:true,  nns:true  },
+  { code:"I050O", label:"Abbreviated given name",      san_ind:true,  san_ent:true,  scion:true,  pep_ind:true,  pep_ent:true,  nns:true  },
+  { code:"I060O", label:"Phonetic (Double Metaphone)", san_ind:false, san_ent:false, scion:false, pep_ind:true,  pep_ent:true,  nns:true  },
+  { code:"I070O", label:"Transliteration variants",    san_ind:true,  san_ent:true,  scion:true,  pep_ind:true,  pep_ent:true,  nns:true  },
+  { code:"I080O", label:"DOB cluster",                 san_ind:true,  san_ent:false, scion:true,  pep_ind:true,  pep_ent:false, nns:false },
+];
+
+const reasons = {
+  "I060O": "High false-positive rate on strict sanction/watchlist jobs. Arabic/Slavic names have many phonetic near-misses that aren't real matches.",
+  "I080O": "Entity records carry no date of birth. DOB cluster cannot fire without a DOB to compare. SCION_ENT, PEP_ENT, NNS all lack DOB.",
+};
+
+const flowSteps = [
+  { step:"Input",            detail:`name = "M. ALI HASSAN"   dob = "1970-03-15"   job = SAN_IND`,                                                         color:"#0ea5e9" },
+  { step:"RuleChain runs",   detail:"I010O=0.0  I020O=0.0  I030O=0.0  I040O=0.6  I050O=0.90 ← WINNER  I060O=skip  I070O=0.0  I080O=0.0",                   color:"#818cf8" },
+  { step:"RuleResult",       detail:`rule_code="I050O"  rule_label="Abbreviated given name"  name_score=0.90  rule_score=0.90`,                              color:"#f59e0b" },
+  { step:"risk_scorer",      detail:"wl_risk=0.82 (OFAC_SDN TERRORISM)  cust_risk=0.65 (IRAN)  blended=74  priority=78",                                    color:"#a3e635" },
+  { step:"apply_threshold",  detail:"SAN_IND threshold=0.65  score=0.90 ≥ 0.65  → ALERT  severity=HIGH",                                                    color:"#ef4444" },
+  { step:"Alert created",    detail:`alert_id="AML-20260310-000001"  rule_code="I050O"  risk=74  priority=78  severity=HIGH`,                                color:"#10b981" },
+];
+
+// ── RENDER UNCHANGED TABLE ────────────────────────────────────────────────────
+const tbody = document.getElementById('unchanged-tbody');
+unchanged.forEach((f, i) => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="path-cell"><code>${f.path}</code>${f.lines ? `<span class="lcount">${f.lines}L</span>` : ''}</td>
+    <td class="note-cell">${f.note}</td>`;
+  tbody.appendChild(tr);
+});
+
+// ── RENDER LAYERS ─────────────────────────────────────────────────────────────
+const container = document.getElementById('layers-container');
+const expanded = {};
+
+layers.forEach((layer, idx) => {
+  // Connector
+  if (idx > 0) {
+    const conn = document.createElement('div');
+    conn.className = 'connector';
+    const line = document.createElement('div');
+    line.className = 'connector-line';
+    line.style.background = `linear-gradient(to bottom, ${layers[idx-1].borderColor}44, ${layer.borderColor}44)`;
+    conn.appendChild(line);
+    container.appendChild(conn);
+  }
+
+  const card = document.createElement('div');
+  card.className = 'layer-card';
+  card.style.border = `1px solid ${layer.borderColor}55`;
+
+  const header = document.createElement('div');
+  header.className = 'layer-header';
+  header.style.background = layer.bg;
+  header.innerHTML = `
+    <div class="layer-step" style="color:${layer.borderColor}">${layer.step}</div>
+    <div class="layer-bar" style="background:${layer.borderColor}"></div>
+    <div class="layer-info">
+      <div class="layer-name" style="color:${layer.color}">${layer.name}</div>
+      <div class="layer-files">${layer.files.join('  ·  ')}</div>
+    </div>
+    <div class="layer-toggle" id="toggle-${layer.id}">▼ expand</div>`;
+
+  const detail = document.createElement('div');
+  detail.className = 'layer-detail';
+  detail.style.borderTopColor = `${layer.borderColor}33`;
+  detail.style.display = 'none';
+  detail.innerHTML = `
+    <div class="problem-box">
+      <div class="box-label">PROBLEM THIS LAYER SOLVES</div>
+      <p>"${layer.problem}"</p>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-box" style="border-color:${layer.borderColor}33">
+        <div class="box-label" style="color:${layer.borderColor}">WHAT THIS LAYER DOES</div>
+        <p>${layer.role}</p>
+      </div>
+      <div class="detail-box" style="border-color:${layer.borderColor}33">
+        <div class="box-label" style="color:${layer.borderColor}">WHAT IT OUTPUTS</div>
+        <ul>${layer.outputs.map(o => `<li>${o}</li>`).join('')}</ul>
+      </div>
+    </div>
+    <div class="critical-box">
+      <div class="box-label">WHY THIS LAYER IS CRITICAL</div>
+      <p>${layer.critical}</p>
+    </div>`;
+
+  card.appendChild(header);
+  card.appendChild(detail);
+  container.appendChild(card);
+
+  card.addEventListener('click', () => {
+    const open = detail.style.display !== 'none';
+    detail.style.display = open ? 'none' : 'block';
+    card.style.border = `1px solid ${open ? layer.borderColor + '55' : layer.borderColor}`;
+    card.style.boxShadow = open ? 'none' : `0 0 20px ${layer.borderColor}22`;
+    document.getElementById(`toggle-${layer.id}`).textContent = open ? '▼ expand' : '▲ collapse';
+  });
+});
+
+// ── RENDER RULE TABLE ─────────────────────────────────────────────────────────
+const rtbody = document.getElementById('rule-tbody');
+ruleRows.forEach((r, i) => {
+  const cols = [r.san_ind, r.san_ent, r.scion, r.pep_ind, r.pep_ent, r.nns];
+  const tagClass = (r.code === 'I060O' || r.code === 'I080O') ? 'tag-amber' : 'tag-accent';
+  const cells = cols.map(en =>
+    `<td class="check-cell" style="color:${en ? '#10b981' : '#ef4444'}">${en ? '✓' : '✗'}</td>`
+  ).join('');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><div class="rule-cell"><span class="tag tag-small ${tagClass}">${r.code}</span><span class="rule-lbl">${r.label}</span></div></td>
+    ${cells}
+    <td class="reason-cell">${reasons[r.code] || '—'}</td>`;
+  rtbody.appendChild(tr);
+});
+
+// ── RENDER FLOW ───────────────────────────────────────────────────────────────
+const flowContainer = document.getElementById('flow-container');
+flowSteps.forEach(s => {
+  const row = document.createElement('div');
+  row.className = 'flow-row';
+  row.innerHTML = `
+    <div class="flow-step"><span style="color:${s.color}">${s.step}</span></div>
+    <div class="flow-detail"><code>${s.detail}</code></div>`;
+  flowContainer.appendChild(row);
+});
+
+// ── TAB SWITCHING ─────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  ['changes','architecture','rules'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === name ? 'block' : 'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
